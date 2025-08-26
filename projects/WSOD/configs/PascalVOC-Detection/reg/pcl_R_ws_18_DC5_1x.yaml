@@ -1,0 +1,4 @@
+_BASE_: "../pcl_R_ws_18_DC5_1x.yaml"
+WSOD:
+  REFINE_K: 4
+  REFINE_REG: [False, False, False, True]

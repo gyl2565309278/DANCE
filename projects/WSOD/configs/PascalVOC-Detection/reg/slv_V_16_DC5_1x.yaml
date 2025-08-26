@@ -1,0 +1,36 @@
+_BASE_: "../Base-VOC2007.yaml"
+MODEL:
+  WEIGHTS: "models/detectron2/ImageNetPretrained/MSRA/V-16.pkl"
+  PIXEL_MEAN: [103.939, 116.779, 123.680]
+  PIXEL_STD: [1.0, 1.0, 1.0]
+  MASK_ON: False
+  LOAD_PROPOSALS: True
+  BACKBONE:
+    NAME: "build_vggnet_backbone"
+    FREEZE_AT: 5
+  VGGNETSWS:
+    DEPTH: 16
+    NORM: ""
+  PROPOSAL_GENERATOR:
+    NAME: "PrecomputedProposals"
+    MIN_SIZE: 20
+  ROI_HEADS:
+    NAME: "SLVROIHeads"
+    IN_FEATURES: ["vgg5"]
+    NUM_CLASSES: 20
+    SCORE_THRESH_TEST: 0.00001
+    NMS_THRESH_TEST: 0.3
+    PROPOSAL_APPEND_GT: False
+    IOU_THRESHOLDS: [0.1, 0.5]
+    IOU_LABELS: [-1, 0, 1]
+  ROI_BOX_HEAD:
+    POOLER_TYPE: "ROIPool"
+    POOLER_RESOLUTION: 7
+    NAME: "FastRCNNConvFCHead"
+    NUM_CONV: 0
+    NUM_FC: 2
+    FC_DIM: 4096
+    USE_PCL_LOSS: False
+WSOD:
+  REFINE_K: 4
+  REFINE_REG: [False, False, False, True]

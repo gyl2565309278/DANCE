@@ -1,0 +1,39 @@
+_BASE_: "../Base-RCNN-DilatedC5.yaml"
+MODEL:
+  WEIGHTS: "models/detectron2/ImageNetPretrained/MSRA/R-50.pkl"
+  MASK_ON: False
+  LOAD_PROPOSALS: True
+  RESNETS:
+    DEPTH: 50
+  PROPOSAL_GENERATOR:
+    NAME: "PrecomputedProposals"
+  ROI_HEADS:
+    NUM_CLASSES: 20
+  ROI_BOX_HEAD:
+    FC_DIM: 4096
+DATASETS:
+  TRAIN: ("voc_2007_trainval", "voc_2012_trainval")
+  PROPOSAL_FILES_TRAIN: ("datasets/proposals/voc_2007_trainval_mcg_proposals_d2.pkl", "datasets/proposals/voc_2012_trainval_mcg_proposals_d2.pkl")
+  PRECOMPUTED_PROPOSAL_TOPK_TRAIN: 4000
+  TEST: ("voc_2007_test",)
+  PROPOSAL_FILES_TEST: ("datasets/proposals/voc_2007_test_mcg_proposals_d2.pkl",)
+  PRECOMPUTED_PROPOSAL_TOPK_TEST: 4000
+DATALOADER:
+  # proposals are part of the dataset_dicts, and take a lot of RAM
+  NUM_WORKERS: 2
+INPUT:
+  MIN_SIZE_TRAIN: (480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800, 832, 864, 896, 928, 960, 992, 1024, 1056, 1088, 1120)
+  MAX_SIZE_TRAIN: 4000
+  MIN_SIZE_TEST: 800
+  MAX_SIZE_TEST: 4000
+  RESIZE_SHORTEST_EDGE: False
+  CROP:
+    ENABLED: False
+SOLVER:
+  IMS_PER_BATCH: 4
+  BASE_LR: 0.005
+  STEPS: (48000, 64000)
+  MAX_ITER: 72000 # 17.4 epochs
+  WARMUP_ITERS: 400
+TEST:
+  EVAL_PERIOD: 5000
