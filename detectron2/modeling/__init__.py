@@ -6,6 +6,10 @@ from .backbone import (
     BACKBONE_REGISTRY,
     FPN,
     Backbone,
+    VGGNet,
+    VGGNetBlockBase,
+    build_vggnet_backbone,
+    make_vggnet_stage,
     ResNet,
     ResNetBlockBase,
     build_backbone,
@@ -56,7 +60,14 @@ from .roi_heads import (
     build_mask_head,
     build_roi_heads,
 )
-from .test_time_augmentation import DatasetMapperTTA, GeneralizedRCNNWithTTA
+from .test_time_augmentation import (
+    TEST_TIME_AUG_REGISTRY,
+    DatasetMapperTTAAverage,
+    GeneralizedRCNNWithTTAAverage,
+    DatasetMapperTTAUnion,
+    GeneralizedRCNNWithTTAUnion,
+    build_test_time_aug,
+)
 from .mmdet_wrapper import MMDetBackbone, MMDetDetector
 
 _EXCLUDE = {"ShapeSpec"}

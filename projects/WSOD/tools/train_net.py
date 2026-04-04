@@ -25,26 +25,19 @@ import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import get_cfg
 from detectron2.data import MetadataCatalog
-from detectron2.engine import (
-    default_argument_parser,
-    DefaultTrainer,
-    hooks,
-    launch,
-)
+from detectron2.engine import DefaultTrainer, default_argument_parser, hooks, launch
 from detectron2.evaluation import (
     CityscapesInstanceEvaluator,
     CityscapesSemSegEvaluator,
     COCOEvaluator,
     COCOPanopticEvaluator,
-    DatasetEvaluator,
     DatasetEvaluators,
     LVISEvaluator,
     PascalVOCDetectionEvaluator,
     SemSegEvaluator,
-    print_csv_format,
     verify_results,
 )
-from detectron2.visualization import DatasetVisualizer
+from detectron2.modeling import build_test_time_aug
 
 import wsod.data.datasets
 from wsod.config import add_wsod_cfg
@@ -53,8 +46,6 @@ from wsod.data import (
     build_detection_train_loader,
 )
 from wsod.engine import default_setup
-from wsod.evaluation import inference_on_dataset
-from wsod.modeling import build_test_time_aug
 
 
 def build_evaluator(cfg, dataset_name, output_folder=None):
@@ -90,9 +81,7 @@ def build_evaluator(cfg, dataset_name, output_folder=None):
         return LVISEvaluator(dataset_name, output_dir=output_folder)
     if len(evaluator_list) == 0:
         raise NotImplementedError(
-            "no Evaluator for the dataset {} with the type {}".format(
-                dataset_name, evaluator_type
-            )
+            "no Evaluator for the dataset {} with the type {}".format(dataset_name, evaluator_type)
         )
     elif len(evaluator_list) == 1:
         return evaluator_list[0]
@@ -134,117 +123,22 @@ class Trainer(DefaultTrainer):
         return build_evaluator(cfg, dataset_name, output_folder)
 
     @classmethod
-    def build_visualizer(cls, cfg, dataset_name: str, output_folder: str, score_thresh: float):
-        return DatasetVisualizer(
-            dataset_name, output_dir=output_folder, score_thresh=score_thresh
-        )
-
-    @classmethod
-    def test(cls, cfg, model, evaluators=None, visualizers=None):
-        """
-        Evaluate the given model. The given model is expected to already contain
-        weights to evaluate.
-
-        Args:
-            cfg (CfgNode):
-            model (nn.Module):
-            evaluators (list[DatasetEvaluator] or None): if None, will call
-                :meth:`build_evaluator`. Otherwise, must have the same length as
-                ``cfg.DATASETS.TEST``.
-
-        Returns:
-            dict: a dict of result metrics
-        """
-        logger = logging.getLogger(__name__)
-
-        if cfg.TEST.EVAL_TRAIN:
-            cfg.defrost()
-            DATASETS_TEST = cfg.DATASETS.TEST
-            DATASETS_PROPOSAL_FILES_TEST = cfg.DATASETS.PROPOSAL_FILES_TEST
-            cfg.DATASETS.TEST = cfg.DATASETS.TEST + cfg.DATASETS.TRAIN
-            cfg.DATASETS.PROPOSAL_FILES_TEST = (
-                cfg.DATASETS.PROPOSAL_FILES_TEST + cfg.DATASETS.PROPOSAL_FILES_TRAIN
-            )
-            cfg.freeze()
-
-        if isinstance(evaluators, DatasetEvaluator):
-            evaluators = [evaluators]
-        if evaluators is not None:
-            assert len(cfg.DATASETS.TEST) == len(evaluators), "{} != {}".format(
-                len(cfg.DATASETS.TEST), len(evaluators)
-            )
-
-        if isinstance(visualizers, DatasetVisualizer):
-            visualizers = [visualizers]
-        if visualizers is not None:
-            assert len(cfg.DATASETS.TEST) == len(visualizers), "{} != {}".format(
-                len(cfg.DATASETS.TEST), len(visualizers)
-            )
-
-        results = OrderedDict()
-        for idx, dataset_name in enumerate(cfg.DATASETS.TEST):
-            data_loader = cls.build_test_loader(cfg, dataset_name)
-
-            # When evaluators are passed in as arguments,
-            # implicitly assume that evaluators can be created before data_loader.
-            if evaluators is not None:
-                evaluator = evaluators[idx]
-            else:
-                try:
-                    evaluator = cls.build_evaluator(cfg, dataset_name)
-                except NotImplementedError:
-                    logger.warning(
-                        "No evaluator found. Use `DefaultTrainer.test(evaluators=)`, "
-                        "or implement its `build_evaluator` method."
-                    )
-                    results[dataset_name] = {}
-                    continue
-
-            if visualizers is not None:
-                visualizer = visualizers[idx]
-            else:
-                visualizer = cls.build_visualizer(
-                    cfg, dataset_name, os.path.join(cfg.OUTPUT_DIR, "vis"), cfg.TEST.VIS.SCORE_THRESH
-                ) if cfg.TEST.VIS.ENABLED else None
-
-            results_i = inference_on_dataset(model, data_loader, evaluator, visualizer)
-            results[dataset_name] = results_i
-            if comm.is_main_process():
-                assert isinstance(
-                    results_i, dict
-                ), "Evaluator must return a dict on the main process. Got {} instead.".format(
-                    results_i
-                )
-                logger.info("Evaluation results for {} in csv format:".format(dataset_name))
-                print_csv_format(results_i)
-
-        if len(results) == 1:
-            results = list(results.values())[0]
-
-        if cfg.TEST.EVAL_TRAIN:
-            cfg.defrost()
-            cfg.DATASETS.TEST = DATASETS_TEST
-            cfg.DATASETS.PROPOSAL_FILES_TEST = DATASETS_PROPOSAL_FILES_TEST
-            cfg.freeze()
-
-        return results
-
-    @classmethod
     def test_with_TTA(cls, cfg, model):
-        if cfg.TEST.EVAL_TRAIN:
-            cfg.defrost()
-            DATASETS_TEST = cfg.DATASETS.TEST
-            DATASETS_PROPOSAL_FILES_TEST = cfg.DATASETS.PROPOSAL_FILES_TEST
-            cfg.DATASETS.TEST = cfg.DATASETS.TEST + cfg.DATASETS.TRAIN
-            cfg.DATASETS.PROPOSAL_FILES_TEST = (
-                cfg.DATASETS.PROPOSAL_FILES_TEST + cfg.DATASETS.PROPOSAL_FILES_TRAIN
-            )
-            cfg.freeze()
-
         logger = logging.getLogger("detectron2.trainer")
         # In the end of training, run an evaluation with TTA
         # Only support some R-CNN models.
         logger.info("Running inference with test-time augmentation ...")
+
+        if cfg.TEST.EVAL_TRAIN:
+            cfg.defrost()
+            DATASETS_TEST = cfg.DATASETS.TEST
+            DATASETS_PROPOSAL_FILES_TEST = cfg.DATASETS.PROPOSAL_FILES_TEST
+            cfg.DATASETS.TEST = cfg.DATASETS.TEST + cfg.DATASETS.TRAIN
+            cfg.DATASETS.PROPOSAL_FILES_TEST = (
+                cfg.DATASETS.PROPOSAL_FILES_TEST + cfg.DATASETS.PROPOSAL_FILES_TRAIN
+            )
+            cfg.freeze()
+
         model = build_test_time_aug(cfg, model)
         evaluators = [
             cls.build_evaluator(
@@ -270,7 +164,6 @@ class Trainer(DefaultTrainer):
 
         res = cls.test(cfg, model, evaluators, visualizers)
         res = OrderedDict({k + "_TTA": v for k, v in res.items()})
-
         return res
 
 

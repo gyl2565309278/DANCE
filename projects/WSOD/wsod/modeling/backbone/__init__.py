@@ -1,12 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 
-from .vggnet import (
-    PlainBlock,
-    VGGNet,
-    VGGNetBlockBase,
-    build_vggnet_backbone,
-    make_vggnet_stage,
-)
 from .resnet_ws import (
     BasicStemWS,
     BottleneckBlockWS,

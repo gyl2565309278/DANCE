@@ -15,41 +15,6 @@ def add_wsod_cfg(cfg):
 
 
     # ---------------------------------------------------------------------------- #
-    # VGG options
-    # ---------------------------------------------------------------------------- #
-    _C.MODEL.VGGNETS = CN()
-
-    _C.MODEL.VGGNETS.DEPTH = 16
-    _C.MODEL.VGGNETS.OUT_FEATURES = ["vgg4"]  # vgg4 for C4 backbone, vgg2..5 for FPN backbone
-
-    # Number of groups to use; 1 ==> VGGNet; > 1 ==> VGGNeXt
-    _C.MODEL.VGGNETS.NUM_GROUPS = 1
-
-    # Options: "", "FrozenBN", "GN", "SyncBN", "BN"
-    _C.MODEL.VGGNETS.NORM = ""
-
-    # Baseline width of each group.
-    # Scaling this parameters will scale the width of all bottleneck layers.
-    _C.MODEL.VGGNETS.WIDTH_PER_GROUP = 64
-
-    # Apply dilation in stage "vgg5"
-    _C.MODEL.VGGNETS.VGG5_DILATION = 1
-
-    # Output width of vgg1. Scaling this parameters will scale the width of all 3x3 convs in VGGNet
-    # This needs to be set to 64
-    _C.MODEL.VGGNETS.VGG1_OUT_CHANNELS = 64
-
-    # Apply Deformable Convolution in stages
-    # Specify if apply deform_conv on vgg1, vgg2, vgg3, vgg4, vgg5
-    _C.MODEL.VGGNETS.DEFORM_ON_PER_STAGE = [False, False, False, False, False]
-    # Use True to use modulated deform_conv (DeformableV2, https://arxiv.org/abs/1811.11168);
-    # Use False for DeformableV1.
-    _C.MODEL.VGGNETS.DEFORM_MODULATED = False
-    # Number of groups in deformable conv.
-    _C.MODEL.VGGNETS.DEFORM_NUM_GROUPS = 1
-
-
-    # ---------------------------------------------------------------------------- #
     # ResNet_ws options
     # ---------------------------------------------------------------------------- #
     _C.MODEL.RESNETSWS = CN()
@@ -138,14 +103,3 @@ def add_wsod_cfg(cfg):
 
     _C.WSOD.SLV.HEATMAP = CN()
     _C.WSOD.SLV.HEATMAP.BINARY_SCORE_THRESH = 0.5
-
-
-    # ---------------------------------------------------------------------------- #
-    # TEST options
-    # ---------------------------------------------------------------------------- #
-    _C.TEST.EVAL_TRAIN = False
-    # Options: "GeneralizedRCNNWSWithTTAAverage", "GeneralizedRCNNWSWithTTAUnion"
-    _C.TEST.AUG.NAME = "GeneralizedRCNNWSWithTTAAverage"
-
-    _C.TEST.VIS = CN({"ENABLED": False})
-    _C.TEST.VIS.SCORE_THRESH = 0.5

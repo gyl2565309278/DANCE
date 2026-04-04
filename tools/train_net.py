@@ -19,6 +19,7 @@ You may want to write your own script with your datasets and other customization
 import logging
 import os
 from collections import OrderedDict
+from typing import Optional
 
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer
@@ -36,7 +37,7 @@ from detectron2.evaluation import (
     SemSegEvaluator,
     verify_results,
 )
-from detectron2.modeling import GeneralizedRCNNWithTTA
+from detectron2.modeling import build_test_time_aug
 
 
 def build_evaluator(cfg, dataset_name, output_folder=None):
@@ -67,7 +68,7 @@ def build_evaluator(cfg, dataset_name, output_folder=None):
     if evaluator_type == "cityscapes_sem_seg":
         return CityscapesSemSegEvaluator(dataset_name)
     elif evaluator_type == "pascal_voc":
-        return PascalVOCDetectionEvaluator(dataset_name)
+        return PascalVOCDetectionEvaluator(dataset_name, output_dir=output_folder)
     elif evaluator_type == "lvis":
         return LVISEvaluator(dataset_name, output_dir=output_folder)
     if len(evaluator_list) == 0:
@@ -88,7 +89,7 @@ class Trainer(DefaultTrainer):
     """
 
     @classmethod
-    def build_evaluator(cls, cfg, dataset_name, output_folder=None):
+    def build_evaluator(cls, cfg, dataset_name: str, output_folder: Optional[str] = None):
         return build_evaluator(cfg, dataset_name, output_folder)
 
     @classmethod
@@ -97,14 +98,41 @@ class Trainer(DefaultTrainer):
         # In the end of training, run an evaluation with TTA
         # Only support some R-CNN models.
         logger.info("Running inference with test-time augmentation ...")
-        model = GeneralizedRCNNWithTTA(cfg, model)
+
+        if cfg.TEST.EVAL_TRAIN:
+            cfg.defrost()
+            DATASETS_TEST = cfg.DATASETS.TEST
+            DATASETS_PROPOSAL_FILES_TEST = cfg.DATASETS.PROPOSAL_FILES_TEST
+            cfg.DATASETS.TEST = cfg.DATASETS.TEST + cfg.DATASETS.TRAIN
+            cfg.DATASETS.PROPOSAL_FILES_TEST = (
+                cfg.DATASETS.PROPOSAL_FILES_TEST + cfg.DATASETS.PROPOSAL_FILES_TRAIN
+            )
+            cfg.freeze()
+
+        model = build_test_time_aug(cfg, model)
         evaluators = [
             cls.build_evaluator(
                 cfg, name, output_folder=os.path.join(cfg.OUTPUT_DIR, "inference_TTA")
             )
             for name in cfg.DATASETS.TEST
         ]
-        res = cls.test(cfg, model, evaluators)
+        visualizers = [
+            cls.build_visualizer(
+                cfg,
+                name,
+                output_folder=os.path.join(cfg.OUTPUT_DIR, "vis_TTA"),
+                score_thresh=cfg.TEST.VIS.SCORE_THRESH,
+            )
+            for name in cfg.DATASETS.TEST
+        ] if cfg.TEST.VIS.ENABLED else None
+
+        if cfg.TEST.EVAL_TRAIN:
+            cfg.defrost()
+            cfg.DATASETS.TEST = DATASETS_TEST
+            cfg.DATASETS.PROPOSAL_FILES_TEST = DATASETS_PROPOSAL_FILES_TEST
+            cfg.freeze()
+
+        res = cls.test(cfg, model, evaluators, visualizers)
         res = OrderedDict({k + "_TTA": v for k, v in res.items()})
         return res
 

@@ -195,7 +195,7 @@ class CascadeROIHeads(StandardROIHeads):
             # Use the boxes of the last head
             predictor, predictions, proposals = head_outputs[-1]
             boxes = predictor.predict_boxes(predictions, proposals)
-            pred_instances, _ = fast_rcnn_inference(
+            pred_instances, _, all_boxes, all_scores = fast_rcnn_inference(
                 boxes,
                 scores,
                 image_sizes,
@@ -203,7 +203,7 @@ class CascadeROIHeads(StandardROIHeads):
                 predictor.test_nms_thresh,
                 predictor.test_topk_per_image,
             )
-            return pred_instances
+            return pred_instances, all_boxes, all_scores
 
     @torch.no_grad()
     def _match_and_label_boxes(self, proposals, stage, targets):

@@ -1,7 +1,7 @@
-_BASE_: "./Base-VOC2007.yaml"
+_BASE_: "Base-COCO2014.yaml"
 DATASETS:
-  TRAIN: ("voc_2007_trainval", )
-  PROPOSAL_FILES_TRAIN: ("datasets/proposals/voc_2007_trainval_mcg_hgps_proposals_d2.pkl", )
+  TRAIN: ("coco_2014_train", )
+  PROPOSAL_FILES_TRAIN: ("datasets/proposals/coco_2014_train_mcg_hgps_proposals_d2.pkl", )
 MODEL:
   WEIGHTS: "models/detectron2/ImageNetPretrained/MSRA/V-16.pkl"
   PIXEL_MEAN: [103.939, 116.779, 123.680]
@@ -18,9 +18,9 @@ MODEL:
     NAME: "PrecomputedProposals"
     MIN_SIZE: 20
   ROI_HEADS:
-    NAME: "DTHCPROIHeads"
+    NAME: "DANCEROIHeads"
     IN_FEATURES: ["vgg5"]
-    NUM_CLASSES: 20
+    NUM_CLASSES: 80
     SCORE_THRESH_TEST: 0.00001
     NMS_THRESH_TEST: 0.3
     PROPOSAL_APPEND_GT: False

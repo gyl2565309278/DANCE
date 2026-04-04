@@ -1,4 +1,4 @@
-_BASE_: "./Base-VOC2007.yaml"
+_BASE_: "Base-VOC2007.yaml"
 DATASETS:
   TRAIN: ("voc_2007_trainval", )
   PROPOSAL_FILES_TRAIN: ("datasets/proposals/voc_2007_trainval_mcg_hgps_proposals_d2.pkl", )

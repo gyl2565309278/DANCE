@@ -10,7 +10,7 @@ SOLVER:
   IMS_PER_BATCH: 8
   STEPS: (36000, )
   GAMMA: 0.1
-  MAX_ITER: 60000  # 40 epochs for 12
+  MAX_ITER: 60000  # 40 epochs for voc12
   WARMUP_ITERS: 600
   WARMUP_FACTOR: !!python/object/apply:eval [1.0 / 3.0]
   WARMUP_METHOD: "linear"
@@ -22,3 +22,4 @@ SOLVER:
   CHECKPOINT_PERIOD: 2500
 TEST:
   EVAL_PERIOD: 2500
+  EVAL_TRAIN: True

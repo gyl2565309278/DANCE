@@ -1,13 +1,18 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 import torch
 from torch.nn import functional as F
+from typing import Optional
 
 from detectron2.structures import Instances, ROIMasks
 
 
 # perhaps should rename to "resize_instance"
 def detector_postprocess(
-    results: Instances, output_height: int, output_width: int, mask_threshold: float = 0.5
+    results: Instances,
+    output_height: int,
+    output_width: int,
+    mask_threshold: float = 0.5,
+    boxes: Optional[torch.Tensor] = None,
 ):
     """
     Resize the output instances.
@@ -23,6 +28,7 @@ def detector_postprocess(
             `results.image_size` contains the input image resolution the detector sees.
             This object might be modified in-place.
         output_height, output_width: the desired output resolution.
+        boxes (torch.Tensor): all the boxes output from the detector.
     Returns:
         Instances: the resized output from the model, based on the output resolution
     """
@@ -70,6 +76,14 @@ def detector_postprocess(
     if results.has("pred_keypoints"):
         results.pred_keypoints[:, :, 0] *= scale_x
         results.pred_keypoints[:, :, 1] *= scale_y
+
+    if boxes is not None:
+        boxes_shape = boxes.shape
+        boxes = boxes.view(-1, 2)
+        boxes[: 0] *= scale_x
+        boxes[: 1] *= scale_y
+        boxes = boxes.view(boxes_shape)
+        return results, boxes
 
     return results
 

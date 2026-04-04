@@ -13,8 +13,9 @@ from detectron2.layers import (
     ShapeSpec,
     get_norm,
 )
-from detectron2.modeling.backbone.backbone import Backbone
-from detectron2.modeling.backbone.build import BACKBONE_REGISTRY
+
+from .backbone import Backbone
+from .build import BACKBONE_REGISTRY
 
 __all__ = [
     "VGGNetBlockBase",

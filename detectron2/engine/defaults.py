@@ -43,6 +43,7 @@ from detectron2.utils.env import seed_all_rng
 from detectron2.utils.events import CommonMetricPrinter, JSONWriter, TensorboardXWriter
 from detectron2.utils.file_io import PathManager
 from detectron2.utils.logger import setup_logger
+from detectron2.visualization import DatasetVisualizer
 
 from . import hooks
 from .train_loop import AMPTrainer, SimpleTrainer, TrainerBase
@@ -611,7 +612,13 @@ class DefaultTrainer(TrainerBase):
         )
 
     @classmethod
-    def test(cls, cfg, model, evaluators=None):
+    def build_visualizer(cls, cfg, dataset_name: str, output_folder: str, score_thresh: float):
+        return DatasetVisualizer(
+            dataset_name, output_dir=output_folder, score_thresh=score_thresh
+        )
+
+    @classmethod
+    def test(cls, cfg, model, evaluators=None, visualizers=None):
         """
         Evaluate the given model. The given model is expected to already contain
         weights to evaluate.
@@ -627,6 +634,17 @@ class DefaultTrainer(TrainerBase):
             dict: a dict of result metrics
         """
         logger = logging.getLogger(__name__)
+
+        if cfg.TEST.EVAL_TRAIN:
+            cfg.defrost()
+            DATASETS_TEST = cfg.DATASETS.TEST
+            DATASETS_PROPOSAL_FILES_TEST = cfg.DATASETS.PROPOSAL_FILES_TEST
+            cfg.DATASETS.TEST = cfg.DATASETS.TEST + cfg.DATASETS.TRAIN
+            cfg.DATASETS.PROPOSAL_FILES_TEST = (
+                cfg.DATASETS.PROPOSAL_FILES_TEST + cfg.DATASETS.PROPOSAL_FILES_TRAIN
+            )
+            cfg.freeze()
+
         if isinstance(evaluators, DatasetEvaluator):
             evaluators = [evaluators]
         if evaluators is not None:
@@ -634,9 +652,17 @@ class DefaultTrainer(TrainerBase):
                 len(cfg.DATASETS.TEST), len(evaluators)
             )
 
+        if isinstance(visualizers, DatasetVisualizer):
+            visualizers = [visualizers]
+        if visualizers is not None:
+            assert len(cfg.DATASETS.TEST) == len(visualizers), "{} != {}".format(
+                len(cfg.DATASETS.TEST), len(visualizers)
+            )
+
         results = OrderedDict()
         for idx, dataset_name in enumerate(cfg.DATASETS.TEST):
             data_loader = cls.build_test_loader(cfg, dataset_name)
+
             # When evaluators are passed in as arguments,
             # implicitly assume that evaluators can be created before data_loader.
             if evaluators is not None:
@@ -651,7 +677,15 @@ class DefaultTrainer(TrainerBase):
                     )
                     results[dataset_name] = {}
                     continue
-            results_i = inference_on_dataset(model, data_loader, evaluator)
+
+            if visualizers is not None:
+                visualizer = visualizers[idx]
+            else:
+                visualizer = cls.build_visualizer(
+                    cfg, dataset_name, os.path.join(cfg.OUTPUT_DIR, "vis"), cfg.TEST.VIS.SCORE_THRESH
+                ) if cfg.TEST.VIS.ENABLED else None
+
+            results_i = inference_on_dataset(model, data_loader, evaluator, visualizer)
             results[dataset_name] = results_i
             if comm.is_main_process():
                 assert isinstance(
@@ -664,6 +698,13 @@ class DefaultTrainer(TrainerBase):
 
         if len(results) == 1:
             results = list(results.values())[0]
+
+        if cfg.TEST.EVAL_TRAIN:
+            cfg.defrost()
+            cfg.DATASETS.TEST = DATASETS_TEST
+            cfg.DATASETS.PROPOSAL_FILES_TEST = DATASETS_PROPOSAL_FILES_TEST
+            cfg.freeze()
+
         return results
 
     @staticmethod

@@ -1,8 +1,13 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
+  VGGNETS:
+    OUT_FEATURES: ["vgg5"]
+    VGG5_DILATION: 2
   RESNETS:
     OUT_FEATURES: ["res5"]
     RES5_DILATION: 2
+  VIT:
+    OUT_FEATURES: ["vit12"]
   RPN:
     IN_FEATURES: ["res5"]
     PRE_NMS_TOPK_TEST: 6000

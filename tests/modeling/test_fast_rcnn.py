@@ -60,7 +60,7 @@ class FastRCNNTest(unittest.TestCase):
         self.assertTrue(logits.grad is not None)
         self.assertTrue(deltas.grad is not None)
 
-        predictions, _ = box_predictor.inference([logits, deltas], [])
+        predictions, _, _, _ = box_predictor.inference([logits, deltas], [])
         self.assertEqual(len(predictions), 0)
 
     @unittest.skipIf(not torch.cuda.is_available(), "CUDA not available")

@@ -71,10 +71,18 @@ def fast_rcnn_inference(
             all detections.
 
     Returns:
-        instances: (list[Instances]): A list of N instances, one for each image in the batch,
+        instances (list[Instances]): A list of N instances, one for each image in the batch,
             that stores the topk most confidence detections.
-        kept_indices: (list[Tensor]): A list of 1D tensor of length of N, each element indicates
+        kept_indices (list[Tensor]): A list of 1D tensor of length of N, each element indicates
             the corresponding boxes/scores index in [0, Ri) from the input, for image i.
+        all_boxes (list[Tensor]): A list of Tensors of predicted class-specific or class-agnostic
+            boxes for each image. Element i has shape (Ri, K * 4) if doing
+            class-specific regression, or (Ri, 4) if doing class-agnostic
+            regression, where Ri is the number of predicted objects for image i.
+            This is compatible with the output of :meth:`FastRCNNOutputLayers.predict_boxes`.
+        all_scores (list[Tensor]): A list of Tensors of predicted class scores for each image.
+            Element i has shape (Ri, K + 1), where Ri is the number of predicted objects
+            for image i. Compatible with the output of :meth:`FastRCNNOutputLayers.predict_probs`.
     """
     result_per_image = [
         fast_rcnn_inference_single_image(
@@ -82,37 +90,12 @@ def fast_rcnn_inference(
         )
         for scores_per_image, boxes_per_image, image_shape in zip(scores, boxes, image_shapes)
     ]
-    return [x[0] for x in result_per_image], [x[1] for x in result_per_image]
-
-
-def _log_classification_stats(pred_logits, gt_classes, prefix="fast_rcnn"):
-    """
-    Log the classification metrics to EventStorage.
-
-    Args:
-        pred_logits: Rx(K+1) logits. The last column is for background class.
-        gt_classes: R labels
-    """
-    num_instances = gt_classes.numel()
-    if num_instances == 0:
-        return
-    pred_classes = pred_logits.argmax(dim=1)
-    bg_class_ind = pred_logits.shape[1] - 1
-
-    fg_inds = (gt_classes >= 0) & (gt_classes < bg_class_ind)
-    num_fg = fg_inds.nonzero().numel()
-    fg_gt_classes = gt_classes[fg_inds]
-    fg_pred_classes = pred_classes[fg_inds]
-
-    num_false_negative = (fg_pred_classes == bg_class_ind).nonzero().numel()
-    num_accurate = (pred_classes == gt_classes).nonzero().numel()
-    fg_num_accurate = (fg_pred_classes == fg_gt_classes).nonzero().numel()
-
-    storage = get_event_storage()
-    storage.put_scalar(f"{prefix}/cls_accuracy", num_accurate / num_instances)
-    if num_fg > 0:
-        storage.put_scalar(f"{prefix}/fg_cls_accuracy", fg_num_accurate / num_fg)
-        storage.put_scalar(f"{prefix}/false_negative", num_false_negative / num_fg)
+    return (
+        [x[0] for x in result_per_image],
+        [x[1] for x in result_per_image],
+        [x[2] for x in result_per_image],
+        [x[3] for x in result_per_image],
+    )
 
 
 def fast_rcnn_inference_single_image(
@@ -134,6 +117,9 @@ def fast_rcnn_inference_single_image(
     Returns:
         Same as `fast_rcnn_inference`, but for only one image.
     """
+    all_boxes = torch.unsqueeze(boxes.clone(), 0)
+    all_scores = torch.unsqueeze(scores.clone(), 0)
+
     valid_mask = torch.isfinite(boxes).all(dim=1) & torch.isfinite(scores).all(dim=1)
     if not valid_mask.all():
         boxes = boxes[valid_mask]
@@ -168,7 +154,41 @@ def fast_rcnn_inference_single_image(
     result.pred_boxes = Boxes(boxes)
     result.scores = scores
     result.pred_classes = filter_inds[:, 1]
-    return result, filter_inds[:, 0]
+    return result, filter_inds[:, 0], all_boxes, all_scores
+
+
+def _log_classification_stats(
+    pred_logits: torch.Tensor,
+    gt_classes: torch.Tensor,
+    prefix="fast_rcnn",
+):
+    """
+    Log the classification metrics to EventStorage.
+
+    Args:
+        pred_logits: Rx(K+1) logits. The last column is for background class.
+        gt_classes: R labels
+    """
+    num_instances = gt_classes.numel()
+    if num_instances == 0:
+        return
+    pred_classes = pred_logits.argmax(dim=1)
+    bg_class_ind = pred_logits.shape[1] - 1
+
+    fg_inds = (gt_classes >= 0) & (gt_classes < bg_class_ind)
+    num_fg = fg_inds.nonzero().numel()
+    fg_gt_classes = gt_classes[fg_inds]
+    fg_pred_classes = pred_classes[fg_inds]
+
+    num_false_negative = (fg_pred_classes == bg_class_ind).nonzero().numel()
+    num_accurate = (pred_classes == gt_classes).nonzero().numel()
+    fg_num_accurate = (fg_pred_classes == fg_gt_classes).nonzero().numel()
+
+    storage = get_event_storage()
+    storage.put_scalar(f"{prefix}/cls_accuracy", num_accurate / num_instances)
+    if num_fg > 0:
+        storage.put_scalar(f"{prefix}/fg_cls_accuracy", fg_num_accurate / num_fg)
+        storage.put_scalar(f"{prefix}/false_negative", num_false_negative / num_fg)
 
 
 class FastRCNNOutputLayers(nn.Module):

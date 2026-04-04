@@ -10,6 +10,7 @@ from torch import nn
 
 from detectron2.utils.comm import get_world_size, is_main_process
 from detectron2.utils.logger import log_every_n_seconds
+from detectron2.visualization.visualizer import DatasetVisualizer
 
 
 class DatasetEvaluator:
@@ -104,6 +105,7 @@ def inference_on_dataset(
     model,
     data_loader,
     evaluator: Union[DatasetEvaluator, List[DatasetEvaluator], None],
+    visualizer: Union[DatasetVisualizer, None],
     callbacks=None,
 ):
     """
@@ -140,6 +142,9 @@ def inference_on_dataset(
         evaluator = DatasetEvaluators(evaluator)
     evaluator.reset()
 
+    if visualizer is not None:
+        visualizer.reset()
+
     num_warmup = min(5, total - 1)
     start_time = time.perf_counter()
     total_data_time = 0
@@ -162,7 +167,7 @@ def inference_on_dataset(
 
             start_compute_time = time.perf_counter()
             dict.get(callbacks or {}, "before_inference", lambda: None)()
-            outputs = model(inputs)
+            outputs, _, _ = model(inputs)
             dict.get(callbacks or {}, "after_inference", lambda: None)()
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
@@ -170,6 +175,8 @@ def inference_on_dataset(
 
             start_eval_time = time.perf_counter()
             evaluator.process(inputs, outputs)
+            if visualizer is not None:
+                visualizer.process(inputs, outputs)
             total_eval_time += time.perf_counter() - start_eval_time
 
             iters_after_start = idx + 1 - num_warmup * int(idx >= num_warmup)
@@ -211,6 +218,8 @@ def inference_on_dataset(
     )
 
     results = evaluator.evaluate()
+    if visualizer is not None:
+        visualizer.visualize()
     # An evaluator may return None when not in main process.
     # Replace it by an empty dict instead to make it easier for downstream code to handle
     if results is None:

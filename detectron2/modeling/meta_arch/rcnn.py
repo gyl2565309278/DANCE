@@ -210,15 +210,18 @@ class GeneralizedRCNN(nn.Module):
                 assert "proposals" in batched_inputs[0]
                 proposals = [x["proposals"].to(self.device) for x in batched_inputs]
 
-            results, _ = self.roi_heads(images, features, proposals, None)
+            results, _, all_boxes, all_scores = self.roi_heads(images, features, proposals, None)
         else:
             detected_instances = [x.to(self.device) for x in detected_instances]
             results = self.roi_heads.forward_with_given_boxes(features, detected_instances)
+            all_boxes, all_scores = [], []
 
         if do_postprocess:
             assert not torch.jit.is_scripting(), "Scripting is not supported for postprocess."
-            return GeneralizedRCNN._postprocess(results, batched_inputs, images.image_sizes)
-        return results
+            results, all_boxes = GeneralizedRCNN._postprocess(
+                results, batched_inputs, all_boxes, images.image_sizes
+            )
+        return results, all_boxes, all_scores
 
     def preprocess_image(self, batched_inputs: List[Dict[str, torch.Tensor]]):
         """
@@ -234,20 +237,27 @@ class GeneralizedRCNN(nn.Module):
         return images
 
     @staticmethod
-    def _postprocess(instances, batched_inputs: List[Dict[str, torch.Tensor]], image_sizes):
+    def _postprocess(
+        instances,
+        batched_inputs: List[Dict[str, torch.Tensor]],
+        all_boxes: List[torch.Tensor],
+        image_sizes,
+    ):
         """
-        Rescale the output instances to the target size.
+        Rescale the output instances and all boxes to the target size.
         """
         # note: private function; subject to changes
         processed_results = []
-        for results_per_image, input_per_image, image_size in zip(
-            instances, batched_inputs, image_sizes
+        processed_all_boxes = []
+        for results_per_image, input_per_image, boxes_per_image, image_size in zip(
+            instances, batched_inputs, all_boxes, image_sizes
         ):
             height = input_per_image.get("height", image_size[0])
             width = input_per_image.get("width", image_size[1])
-            r = detector_postprocess(results_per_image, height, width)
+            r, b = detector_postprocess(results_per_image, height, width, boxes=boxes_per_image)
             processed_results.append({"instances": r})
-        return processed_results
+            processed_all_boxes.append(b)
+        return processed_results, processed_all_boxes
 
 
 @META_ARCH_REGISTRY.register()

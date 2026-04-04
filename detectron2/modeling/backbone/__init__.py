@@ -2,8 +2,13 @@
 from .build import build_backbone, BACKBONE_REGISTRY  # noqa F401 isort:skip
 
 from .backbone import Backbone
-from .fpn import FPN
-from .regnet import RegNet
+from .vggnet import (
+    PlainBlock,
+    VGGNet,
+    VGGNetBlockBase,
+    build_vggnet_backbone,
+    make_vggnet_stage,
+)
 from .resnet import (
     BasicStem,
     ResNet,
@@ -12,6 +17,8 @@ from .resnet import (
     make_stage,
     BottleneckBlock,
 )
+from .regnet import RegNet
+from .fpn import FPN
 from .vit import (
     ViT,
     SimpleFeaturePyramid,

@@ -3,7 +3,7 @@ import copy
 import numpy as np
 from contextlib import contextmanager
 from itertools import count
-from typing import List
+from typing import List, Optional
 import torch
 from fvcore.transforms import HFlipTransform, NoOpTransform
 from torch import nn
@@ -22,13 +22,47 @@ from detectron2.modeling.postprocessing import detector_postprocess
 from detectron2.modeling.roi_heads.fast_rcnn import fast_rcnn_inference_single_image
 from detectron2.structures import Boxes, Instances
 
+from ..meta_arch import GeneralizedRCNN
 from .build import TEST_TIME_AUG_REGISTRY
-from .meta_arch import GeneralizedWSRCNN
 
-__all__ = ["DatasetMapperTTAUnion", "GeneralizedRCNNWSWithTTAUnion"]
+__all__ = ["DatasetMapperTTAAverage", "GeneralizedRCNNWithTTAAverage"]
 
 
-class DatasetMapperTTAUnion:
+def transform_proposals(dataset_dict, image_shape, transforms, *, proposal_topk, min_box_size=0):
+    """
+    Apply transformations to the proposals in dataset_dict, if any.
+
+    Args:
+        dataset_dict (dict): a dict read from the dataset, possibly
+            contains fields "proposal_boxes", "objectness_logits", "transforms"
+        image_shape (tuple): height, width
+        transforms (TransformList): the transforms from current state to desired state
+        proposal_topk (int): only keep top-K scoring proposals
+        min_box_size (int): proposals with either side smaller than this
+            threshold are removed
+
+    The input dict is modified in-place, with abovementioned keys removed. A new
+    key "proposals" will be added. Its value is an `Instances`
+    object which contains the transformed proposals in its field
+    "proposal_boxes" and "objectness_logits".
+    """
+    boxes = dataset_dict["proposals"].proposal_boxes.tensor.cpu().numpy()
+    boxes = transforms.apply_box(boxes)
+    boxes = Boxes(boxes)
+    objectness_logits = dataset_dict["proposals"].objectness_logits
+
+    boxes.clip(image_shape)
+    keep = boxes.nonempty(threshold=min_box_size)
+    boxes = boxes[keep]
+    objectness_logits = objectness_logits[keep]
+
+    proposals = Instances(image_shape)
+    proposals.proposal_boxes = boxes[:proposal_topk]
+    proposals.objectness_logits = objectness_logits[:proposal_topk]
+    dataset_dict["proposals"] = proposals
+
+
+class DatasetMapperTTAAverage:
     """
     Implement test-time augmentation for detection data.
     It is a callable which takes a dataset dict from a detection dataset,
@@ -38,7 +72,14 @@ class DatasetMapperTTAUnion:
     """
 
     @configurable
-    def __init__(self, min_sizes: List[int], max_size: int, flip: bool, resize_shortest_edge: bool):
+    def __init__(
+        self,
+        min_sizes: List[int],
+        max_size: int,
+        flip: bool,
+        resize_shortest_edge: bool,
+        proposal_topk: Optional[int],
+    ):
         """
         Args:
             min_sizes: list of short-edge size to resize the image to
@@ -51,6 +92,8 @@ class DatasetMapperTTAUnion:
         self.flip = flip
         self.resize_shortest_edge = resize_shortest_edge
 
+        self.proposal_topk = proposal_topk
+
     @classmethod
     def from_config(cls, cfg):
         return {
@@ -58,6 +101,11 @@ class DatasetMapperTTAUnion:
             "max_size": cfg.TEST.AUG.MAX_SIZE,
             "flip": cfg.TEST.AUG.FLIP,
             "resize_shortest_edge": cfg.INPUT.RESIZE_SHORTEST_EDGE,
+            "proposal_topk": (
+                cfg.DATASETS.PRECOMPUTED_PROPOSAL_TOPK_TEST
+                if cfg.MODEL.LOAD_PROPOSALS
+                else None
+            ),
         }
 
     def __call__(self, dataset_dict):
@@ -102,12 +150,17 @@ class DatasetMapperTTAUnion:
             dic = copy.deepcopy(dataset_dict)
             dic["transforms"] = pre_tfm + tfms
             dic["image"] = torch_image
+
+            if self.proposal_topk is not None:
+                image_shape = new_image.shape[:2]  # (h, w)
+                transform_proposals(dic, image_shape, tfms, proposal_topk=self.proposal_topk)
+
             ret.append(dic)
         return ret
 
 
 @TEST_TIME_AUG_REGISTRY.register()
-class GeneralizedRCNNWSWithTTAUnion(nn.Module):
+class GeneralizedRCNNWithTTAAverage(nn.Module):
     """
     A GeneralizedRCNN with test-time augmentation enabled.
     Its :meth:`__call__` method has the same interface as :meth:`GeneralizedRCNN.forward`.
@@ -127,7 +180,7 @@ class GeneralizedRCNNWSWithTTAUnion(nn.Module):
         if isinstance(model, DistributedDataParallel):
             model = model.module
         assert isinstance(
-            model, GeneralizedWSRCNN
+            model, GeneralizedRCNN
         ), "TTA is only supported on GeneralizedRCNNWS. Got a model of type {}".format(type(model))
         self.cfg = cfg.clone()
         assert not self.cfg.MODEL.KEYPOINT_ON, "TTA for keypoint is not supported yet"
@@ -135,7 +188,7 @@ class GeneralizedRCNNWSWithTTAUnion(nn.Module):
         self.model = model
 
         if tta_mapper is None:
-            tta_mapper = DatasetMapperTTAUnion(cfg)
+            tta_mapper = DatasetMapperTTAAverage(cfg)
         self.tta_mapper = tta_mapper
         self.batch_size = batch_size
 
@@ -176,20 +229,21 @@ class GeneralizedRCNNWSWithTTAUnion(nn.Module):
             detected_instances = [None] * len(batched_inputs)
 
         outputs = []
+        all_boxes = []
+        all_scores = []
         inputs, instances = [], []
         for idx, input, instance in zip(count(), batched_inputs, detected_instances):
             inputs.append(input)
             instances.append(instance)
             if len(inputs) == self.batch_size or idx == len(batched_inputs) - 1:
-                outputs.extend(
-                    self.model.inference(
-                        inputs,
-                        instances if instances[0] is not None else None,
-                        do_postprocess=False,
-                    )[0]
+                outputs_per_batch, all_boxes_per_batch, all_scores_per_batch = self.model.inference(
+                    inputs, instances if instances[0] is not None else None, do_postprocess=False
                 )
+                outputs.extend(outputs_per_batch)
+                all_boxes.extend(all_boxes_per_batch)
+                all_scores.extend(all_scores_per_batch)
                 inputs, instances = [], []
-        return outputs
+        return outputs, all_boxes, all_scores
 
     def __call__(self, batched_inputs):
         """
@@ -222,9 +276,9 @@ class GeneralizedRCNNWSWithTTAUnion(nn.Module):
         # Detect boxes from all augmented versions
         with self._turn_off_roi_heads(["mask_on", "keypoint_on"]):
             # temporarily disable roi heads
-            all_boxes, all_scores, all_classes = self._get_augmented_boxes(augmented_inputs, tfms)
+            all_boxes, all_scores = self._get_augmented_boxes(augmented_inputs, tfms)
         # merge all detected boxes to obtain final predictions for boxes
-        merged_instances = self._merge_detections(all_boxes, all_scores, all_classes, orig_shape)
+        merged_instances = self._merge_detections(all_boxes, all_scores, orig_shape)
 
         if self.cfg.MODEL.MASK_ON:
             # Use the detected boxes to obtain masks
@@ -232,7 +286,7 @@ class GeneralizedRCNNWSWithTTAUnion(nn.Module):
                 augmented_inputs, merged_instances, tfms
             )
             # run forward on the detected boxes
-            outputs = self._batch_inference(augmented_inputs, augmented_instances)
+            outputs, _, _ = self._batch_inference(augmented_inputs, augmented_instances)
             # Delete now useless variables to avoid being out of memory
             del augmented_inputs, augmented_instances
             # average the predictions
@@ -249,32 +303,28 @@ class GeneralizedRCNNWSWithTTAUnion(nn.Module):
 
     def _get_augmented_boxes(self, augmented_inputs, tfms):
         # 1: forward with all augmented images
-        outputs = self._batch_inference(augmented_inputs)
-        # 2: union the results
-        all_boxes = []
-        all_scores = []
-        all_classes = []
-        for output, tfm in zip(outputs, tfms):
+        _, all_boxes, all_scores = self._batch_inference(augmented_inputs)
+        # 2: average the results
+        for idx, tfm in enumerate(tfms):
             # Need to inverse the transforms on boxes, to obtain results on original image
-            pred_boxes = output.pred_boxes.tensor
-            original_pred_boxes = tfm.inverse().apply_box(pred_boxes.cpu().numpy())
-            all_boxes.append(torch.from_numpy(original_pred_boxes).to(pred_boxes.device))
-
-            all_scores.extend(output.scores)
-            all_classes.extend(output.pred_classes)
+            pred_boxes = all_boxes[idx]
+            pred_boxes_shape = pred_boxes.shape
+            original_pred_boxes = tfm.inverse().apply_box(pred_boxes.reshape(-1, 4).cpu().numpy())
+            all_boxes[idx] = (
+                torch.from_numpy(original_pred_boxes)
+                .to(pred_boxes.device)
+                .reshape(pred_boxes_shape)
+            )
         all_boxes = torch.cat(all_boxes, dim=0)
-        return all_boxes, all_scores, all_classes
+        all_boxes = torch.mean(all_boxes, dim=0, keepdim=False)
+        all_scores = torch.cat(all_scores, dim=0)
+        all_scores = torch.mean(all_scores, dim=0, keepdim=False)
+        return all_boxes, all_scores
 
-    def _merge_detections(self, all_boxes, all_scores, all_classes, shape_hw):
-        # select from the union of all results
-        num_boxes = len(all_boxes)
-        num_classes = self.cfg.MODEL.ROI_HEADS.NUM_CLASSES
-        # +1 because fast_rcnn_inference expects background scores as well
-        all_scores_2d = torch.zeros(num_boxes, num_classes + 1, device=all_boxes.device)
-        for idx, cls, score in zip(count(), all_classes, all_scores):
-            all_scores_2d[idx, cls] = score
+    def _merge_detections(self, all_boxes, all_scores, shape_hw):
+        all_scores_2d = all_scores
 
-        merged_instances, _ = fast_rcnn_inference_single_image(
+        merged_instances, _, _, _ = fast_rcnn_inference_single_image(
             all_boxes,
             all_scores_2d,
             shape_hw,

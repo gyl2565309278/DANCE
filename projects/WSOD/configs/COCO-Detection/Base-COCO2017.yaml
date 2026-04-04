@@ -1,0 +1,24 @@
+_BASE_: "../Base-RCNN-DilatedC5.yaml"
+DATASETS:
+  TRAIN: ('coco_2017_train',)
+  PROPOSAL_FILES_TRAIN: ('datasets/proposals/coco_2017_train_mcg_proposals_d2.pkl')
+  PRECOMPUTED_PROPOSAL_TOPK_TRAIN: 4000
+  TEST: ('coco_2017_val',)
+  PROPOSAL_FILES_TEST: ('datasets/proposals/coco_2017_val_mcg_proposals_d2.pkl',)
+  PRECOMPUTED_PROPOSAL_TOPK_TEST: 4000
+SOLVER:
+  IMS_PER_BATCH: 8
+  STEPS: (105000, )
+  GAMMA: 0.1
+  MAX_ITER: 150000  # 10 epochs for coco17
+  WARMUP_ITERS: 1500
+  WARMUP_FACTOR: !!python/object/apply:eval [1.0 / 1500.0]
+  WARMUP_METHOD: "linear"
+  OPTIMIZER_NAME: "SGD"
+  BASE_LR: 0.002
+  WEIGHT_DECAY: 0.0005
+  BIAS_LR_FACTOR: 2.0
+  WEIGHT_DECAY_BIAS: 0.0
+  CHECKPOINT_PERIOD: 15000
+TEST:
+  EVAL_PERIOD: 10000

@@ -1,7 +1,7 @@
 DATALOADER:
   NUM_WORKERS: 4
 MODEL:
-  META_ARCHITECTURE: "GeneralizedWSRCNN"
+  META_ARCHITECTURE: "GeneralizedRCNN"
   VGGNETS:
     OUT_FEATURES: ["vgg5"]
     VGG5_DILATION: 2
@@ -24,14 +24,19 @@ INPUT:
   MAX_SIZE_TEST: 4000
   CROP:
     ENABLED: False
+SOLVER:
+  CLIP_GRADIENTS:
+    ENABLED: True
+    CLIP_TYPE: "norm"
+    CLIP_VALUE: 1.0
+    NORM_TYPE: 2.0
 TEST:
   AUG:
     ENABLED: True
-    NAME: "GeneralizedRCNNWSWithTTAAverage"
-    MIN_SIZES: (480, 576, 672, 768, 864, 960, 1056, 1152)
+    NAME: "GeneralizedRCNNWithTTAAverage"
+    MIN_SIZES: (480, 576, 688, 768, 864, 960, 1056, 1152)
     MAX_SIZE: 4000
     FLIP: True
-  EVAL_TRAIN: True
   VIS:
     ENABLED: False
     SCORE_THRESH: 0.5

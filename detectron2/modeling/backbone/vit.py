@@ -28,7 +28,6 @@ from .utils import (
 
 logger = logging.getLogger(__name__)
 
-
 __all__ = [
     "ViT",
     "SimpleFeaturePyramid",
@@ -351,7 +350,7 @@ class ViT(Backbone):
         self.blocks = nn.ModuleList()
         self.block_names = []
         for i in range(depth):
-            name = "vit" + str(i + 1)
+            name = "blk{}".format(i + 1)
 
             block = Block(
                 dim=embed_dim,
@@ -381,16 +380,12 @@ class ViT(Backbone):
         if num_classes is not None:
             self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
             self.linear = nn.Linear(embed_dim, num_classes)
-
-            # Sec 5.1 in "Accurate, Large Minibatch SGD: Training ImageNet in 1 Hour":
-            # "The 1000-way fully-connected layer is initialized by
-            # drawing weights from a zero-mean Gaussian with standard deviation of 0.01."
-            nn.init.normal_(self.linear.weight, std=0.01)
             name = "linear"
 
         if out_features is None:
             out_features = [name]
         self._out_features = out_features
+
         self._size_divisibility = patch_size
         self._square_pad = square_pad
 
@@ -698,6 +693,7 @@ def build_vit_backbone(cfg, input_shape: ShapeSpec):
     num_classes            = cfg.MODEL.BACKBONE.NUM_CLASSES
     freeze_at              = cfg.MODEL.BACKBONE.FREEZE_AT
     out_features           = cfg.MODEL.VIT.OUT_FEATURES
+    square_pad             = cfg.MODEL.VIT.SQUARE_PAD
     img_size               = cfg.MODEL.VIT.IMG_SIZE
     patch_size             = cfg.MODEL.VIT.PATCH_SIZE
     embed_dim              = cfg.MODEL.VIT.EMBED_DIM
@@ -715,7 +711,6 @@ def build_vit_backbone(cfg, input_shape: ShapeSpec):
     use_act_checkpoint     = cfg.MODEL.VIT.USE_ACT_CHECKPOINT
     pretrain_img_size      = cfg.MODEL.VIT.PRETRAIN_IMG_SIZE
     pretrain_use_cls_token = cfg.MODEL.VIT.PRETRAIN_USE_CLS_TOKEN
-    square_pad             = cfg.MODEL.VIT.SQUARE_PAD
     # fmt: on
 
     return ViT(

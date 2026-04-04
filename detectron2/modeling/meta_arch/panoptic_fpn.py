@@ -154,7 +154,7 @@ class PanopticFPN(GeneralizedRCNN):
         features = self.backbone(images.tensor)
         sem_seg_results, sem_seg_losses = self.sem_seg_head(features, None)
         proposals, _ = self.proposal_generator(images, features, None)
-        detector_results, _ = self.roi_heads(images, features, proposals, None)
+        detector_results, _, _, _ = self.roi_heads(images, features, proposals, None)
 
         if do_postprocess:
             processed_results = []

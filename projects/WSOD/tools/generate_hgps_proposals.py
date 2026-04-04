@@ -113,8 +113,6 @@ if __name__ == "__main__":
         clusters: List[Dict[str, Any]] = []
         for cls_idx, cam in cams_per_image.items():
             pseudo_gt_ids_per_class: List[Tuple[int, torch.Tensor]] = []
-            heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
-            heat_img = cv2.addWeighted(img, 0.5, heatmap, 0.5, 0)
 
             binary_mask = np.int64(cam >= args.low_score_thresh)
             labeled_mask = label(binary_mask)
@@ -123,9 +121,9 @@ if __name__ == "__main__":
             low_thresh_boxes = torch.zeros((0, 4), dtype=torch.int64)
             low_thresh_boxes_re = torch.zeros((0, 4), dtype=torch.int64)
             for r_id, region in enumerate(regions):
-                if region.area < 50:
-                    continue
                 y1, x1, y2, x2 = region.bbox
+                if (x2 - x1) * (y2 - y1) < 40:
+                    continue
                 low_masks = torch.cat([low_masks, torch.from_numpy(labeled_mask == r_id + 1).unsqueeze(0)])
                 low_thresh_boxes = torch.cat([low_thresh_boxes, torch.tensor([x1, y1, x2, y2], dtype=torch.int64).unsqueeze(0)])
                 x1_re, y1_re, x2_re, y2_re = resize_box(x1, y1, x2, y2, args.resize_ratio, img.shape)
@@ -138,9 +136,9 @@ if __name__ == "__main__":
             high_thresh_boxes = torch.zeros((0, 4), dtype=torch.int64)
             high_thresh_boxes_re = torch.zeros((0, 4), dtype=torch.int64)
             for r_id, region in enumerate(regions):
-                if region.area < 50:
-                    continue
                 y1, x1, y2, x2 = region.bbox
+                if (x2 - x1) * (y2 - y1) < 40:
+                    continue
                 high_masks = torch.cat([high_masks, torch.from_numpy(labeled_mask == r_id + 1).unsqueeze(0)])
                 high_thresh_boxes = torch.cat([high_thresh_boxes, torch.tensor([x1, y1, x2, y2], dtype=torch.int64).unsqueeze(0)])
                 x1_re, y1_re, x2_re, y2_re = resize_box(x1, y1, x2, y2, args.resize_ratio, img.shape)
@@ -148,7 +146,9 @@ if __name__ == "__main__":
 
             high_in_low = mask_in(high_masks, low_masks)
             assert (high_in_low.sum(dim=1) == 1).all() == True, "Something is wrong."
-            assert high_in_low.shape[1] > 0, "Must have low boxes."
+
+            if high_in_low.shape[1] == 0:
+                continue
 
             low_eq_prop = pairwise_equal(low_thresh_boxes, proposal_boxes)
             high_re_eq_prop = pairwise_equal(high_thresh_boxes_re, proposal_boxes)
@@ -209,7 +209,7 @@ if __name__ == "__main__":
 
             pseudo_gt_ids.extend(pseudo_gt_ids_per_class)
 
-        assert proposal_boxes.shape[0] == proposal_objectness_logits.shape[0], "Fuck!"
+        assert proposal_boxes.shape[0] == proposal_objectness_logits.shape[0], "They must be same!"
         inds = proposal_objectness_logits.argsort(descending=True)
         for pgi, pg in pseudo_gt_ids:
             find = (inds == pg.unsqueeze(1)).to(torch.int64)

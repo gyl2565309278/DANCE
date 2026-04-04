@@ -1,12 +1,9 @@
 import logging
 import os
-from copy import copy
-from typing import Dict
 import torch
 
 from detectron2.data import MetadataCatalog
 from detectron2.data.detection_utils import read_image
-from detectron2.structures import Instances
 from detectron2.utils import comm
 from detectron2.utils.file_io import PathManager
 from detectron2.utils.visualizer import ColorMode, Visualizer

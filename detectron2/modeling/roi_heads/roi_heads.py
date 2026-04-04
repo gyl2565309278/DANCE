@@ -495,9 +495,9 @@ class Res5ROIHeads(ROIHeads):
                 losses.update(self.mask_head(mask_features, proposals))
             return [], losses
         else:
-            pred_instances, _ = self.box_predictor.inference(predictions, proposals)
+            pred_instances, _, all_boxes, all_scores = self.box_predictor.inference(predictions, proposals)
             pred_instances = self.forward_with_given_boxes(features, pred_instances)
-            return pred_instances, {}
+            return pred_instances, {}, all_boxes, all_scores
 
     def forward_with_given_boxes(
         self, features: Dict[str, torch.Tensor], instances: List[Instances]
@@ -744,11 +744,11 @@ class StandardROIHeads(ROIHeads):
             losses.update(self._forward_keypoint(features, proposals))
             return proposals, losses
         else:
-            pred_instances = self._forward_box(features, proposals)
+            pred_instances, all_boxes, all_scores = self._forward_box(features, proposals)
             # During inference cascaded prediction is used: the mask and keypoints heads are only
             # applied to the top scoring box detections.
             pred_instances = self.forward_with_given_boxes(features, pred_instances)
-            return pred_instances, {}
+            return pred_instances, {}, all_boxes, all_scores
 
     def forward_with_given_boxes(
         self, features: Dict[str, torch.Tensor], instances: List[Instances]
@@ -812,8 +812,8 @@ class StandardROIHeads(ROIHeads):
                         proposals_per_image.proposal_boxes = Boxes(pred_boxes_per_image)
             return losses
         else:
-            pred_instances, _ = self.box_predictor.inference(predictions, proposals)
-            return pred_instances
+            pred_instances, _, all_boxes, all_scores = self.box_predictor.inference(predictions, proposals)
+            return pred_instances, all_boxes, all_scores
 
     def _forward_mask(self, features: Dict[str, torch.Tensor], instances: List[Instances]):
         """

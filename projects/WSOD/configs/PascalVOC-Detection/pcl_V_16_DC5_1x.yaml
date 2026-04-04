@@ -1,4 +1,4 @@
-_BASE_: "./Base-VOC2007.yaml"
+_BASE_: "Base-VOC2007.yaml"
 MODEL:
   WEIGHTS: "models/detectron2/ImageNetPretrained/MSRA/V-16.pkl"
   PIXEL_MEAN: [103.939, 116.779, 123.680]

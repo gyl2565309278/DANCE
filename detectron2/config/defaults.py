@@ -483,6 +483,41 @@ _C.MODEL.RETINANET.NORM = ""
 
 
 # ---------------------------------------------------------------------------- #
+# VGG options
+# ---------------------------------------------------------------------------- #
+_C.MODEL.VGGNETS = CN()
+
+_C.MODEL.VGGNETS.DEPTH = 16
+_C.MODEL.VGGNETS.OUT_FEATURES = ["vgg4"]  # vgg4 for C4 backbone, vgg2..5 for FPN backbone
+
+# Number of groups to use; 1 ==> VGGNet; > 1 ==> VGGNeXt
+_C.MODEL.VGGNETS.NUM_GROUPS = 1
+
+# Options: "", "FrozenBN", "GN", "SyncBN", "BN"
+_C.MODEL.VGGNETS.NORM = ""
+
+# Baseline width of each group.
+# Scaling this parameters will scale the width of all bottleneck layers.
+_C.MODEL.VGGNETS.WIDTH_PER_GROUP = 64
+
+# Apply dilation in stage "vgg5"
+_C.MODEL.VGGNETS.VGG5_DILATION = 1
+
+# Output width of vgg1. Scaling this parameters will scale the width of all 3x3 convs in VGGNet
+# This needs to be set to 64
+_C.MODEL.VGGNETS.VGG1_OUT_CHANNELS = 64
+
+# Apply Deformable Convolution in stages
+# Specify if apply deform_conv on vgg1, vgg2, vgg3, vgg4, vgg5
+_C.MODEL.VGGNETS.DEFORM_ON_PER_STAGE = [False, False, False, False, False]
+# Use True to use modulated deform_conv (DeformableV2, https://arxiv.org/abs/1811.11168);
+# Use False for DeformableV1.
+_C.MODEL.VGGNETS.DEFORM_MODULATED = False
+# Number of groups in deformable conv.
+_C.MODEL.VGGNETS.DEFORM_NUM_GROUPS = 1
+
+
+# ---------------------------------------------------------------------------- #
 # ResNe[X]t options (ResNets = {ResNet, ResNeXt})
 # Note that parts of a resnet may be used for both the backbone and the head
 # These options apply to both
@@ -663,6 +698,9 @@ _C.TEST = CN()
 # Each item is [task, metric, value, tolerance]
 # e.g.: [['bbox', 'AP', 38.5, 0.2]]
 _C.TEST.EXPECTED_RESULTS = []
+# Whether to test on the train set.
+# Set to False to disable.
+_C.TEST.EVAL_TRAIN = False
 # The period (in terms of steps) to evaluate the model during training.
 # Set to 0 to disable.
 _C.TEST.EVAL_PERIOD = 0
@@ -673,8 +711,13 @@ _C.TEST.KEYPOINT_OKS_SIGMAS = []
 # Maximum number of detections to return per image during inference (100 is
 # based on the limit established for the COCO dataset).
 _C.TEST.DETECTIONS_PER_IMAGE = 100
+# Visualize detected bounding box on the image.
+_C.TEST.VIS = CN({"ENABLED": False})
+_C.TEST.VIS.SCORE_THRESH = 0.5
 
 _C.TEST.AUG = CN({"ENABLED": False})
+# Options: "GeneralizedRCNNWithTTAAverage", "GeneralizedRCNNWithTTAUnion"
+_C.TEST.AUG.NAME = "GeneralizedRCNNWithTTAAverage"
 _C.TEST.AUG.MIN_SIZES = (400, 500, 600, 700, 800, 900, 1000, 1100, 1200)
 _C.TEST.AUG.MAX_SIZE = 4000
 _C.TEST.AUG.FLIP = True

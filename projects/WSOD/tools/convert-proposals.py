@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument("--dataset-name", default="voc_2007_trainval", type=str)
 parser.add_argument("--proposal-type", default="mcg", choices=["ss", "mcg"], type=str)
-parser.add_argument("--proposal-dir", default="datasets/proposals/MCG-Pascal-Main_trainvaltest_2007-boxes", choices=["ss", "mcg"], type=str)
+parser.add_argument("--proposal-dir", default="datasets/proposals/MCG-Pascal-Main_trainvaltest_2007-boxes", type=str)
 
 
 def convert_ss_box(args: Namespace) -> None:
