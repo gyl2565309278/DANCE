@@ -1,4 +1,4 @@
-# Dual-Thresholding Heatmaps to Cluster Proposals for Weakly Supervised Object Detection
+# Dual-Thresholded Heatmap-Guided Proposal Clustering and Negative Certainty Supervision with Enhanced Base Network for Weakly Supervised Object Detection
 
 By [Yuelin Guo](https://scholar.google.com/citations?user=EZfWgzoAAAAJ), [Haoyu He](https://scholar.google.com/citations?user=aU1zMhUAAAAJ), [Zhiyuan Chen](https://scholar.google.com/citations?user=FuehZ2gAAAAJ), [Zitong Huang](https://scholar.google.com/citations?user=WHVC7kkAAAAJ), [Renhao Lu](https://scholar.google.com/citations?user=Ho-L_E8AAAAJ), [Lu Shi](https://scholar.google.com/citations?user=A_kTOV8AAAAJ), [Zejun Wang](https://scholar.google.com/citations?hl=zh-CN&user=RHyxwX4AAAAJ), and [Weizhe Zhang](https://scholar.google.com/citations?user=GOQFn7sAAAAJ).
 
